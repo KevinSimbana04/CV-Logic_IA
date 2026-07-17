@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
+from datetime import datetime
 
 # ==========================================
 # USUARIOS Y AUTENTICACIÓN
@@ -52,7 +53,20 @@ class VacanteCreate(BaseModel):
 class VacanteOut(VacanteCreate):
     id: int
     empresa_id: int
+    fecha_creacion: datetime
     empresa: Optional[UsuarioOut] = None
+
+    class Config:
+        from_attributes = True
+
+# ==========================================
+# POSTULACIONES
+# ==========================================
+class PostulacionOut(BaseModel):
+    id: int
+    candidato_id: int
+    vacante_id: int
+    fecha_postulacion: datetime
 
     class Config:
         from_attributes = True
@@ -67,10 +81,10 @@ class MatchCandidatoOut(BaseModel):
     perfil: PerfilCandidatoOut
     porcentaje_match_vacante: str
     confianza_vacante: float
-    rol_sugerido_por_ia: str
-    porcentaje_rol_sugerido: str
-    confianza_rol_sugerido: float
+    es_top_3: bool
+    rol_sugerido_por_ia: Optional[str] = None
+    porcentaje_rol_sugerido: Optional[str] = None
+    confianza_rol_sugerido: Optional[float] = None
 
 class MatchResponseOut(BaseModel):
-    candidato_ideal: Optional[MatchCandidatoOut] = None
-    otras_sugerencias: List[MatchCandidatoOut] = []
+    resultados: List[MatchCandidatoOut] = []

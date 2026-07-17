@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, JSON, DateTime
+from sqlalchemy.orm import relationship
+from datetime import datetime
 from sqlalchemy.orm import relationship
 from data.database import Base
 
@@ -13,6 +15,7 @@ class Usuario(Base):
 
     perfil = relationship("PerfilCandidato", back_populates="usuario", uselist=False)
     vacantes = relationship("Vacante", back_populates="empresa")
+    postulaciones = relationship("Postulacion", back_populates="candidato")
 
 class PerfilCandidato(Base):
     __tablename__ = "perfil_candidato"
@@ -35,5 +38,18 @@ class Vacante(Base):
     tecnologias_requeridas = Column(JSON, nullable=False)
     nivel_experiencia_esperado = Column(Integer, nullable=False)
     modalidad = Column(String, nullable=False)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
 
     empresa = relationship("Usuario", back_populates="vacantes")
+    postulaciones = relationship("Postulacion", back_populates="vacante")
+
+class Postulacion(Base):
+    __tablename__ = "postulaciones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    candidato_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    vacante_id = Column(Integer, ForeignKey("vacantes.id"), nullable=False)
+    fecha_postulacion = Column(DateTime, default=datetime.utcnow)
+
+    candidato = relationship("Usuario", back_populates="postulaciones")
+    vacante = relationship("Vacante", back_populates="postulaciones")

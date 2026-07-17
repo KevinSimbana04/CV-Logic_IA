@@ -3,13 +3,14 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List
 from jose import jwt, JWTError
+from datetime import datetime, timedelta
 
 # Importaciones locales
 from data.database import engine, Base, get_db
-from models.models import Usuario, PerfilCandidato, Vacante
+from models.models import Usuario, PerfilCandidato, Vacante, Postulacion
 from schemas import (
     RegistroUsuario, TokenAuth, PerfilCandidatoCreate, PerfilCandidatoOut,
-    VacanteCreate, VacanteOut, MatchCandidatoOut, MatchResponseOut, UsuarioOut
+    VacanteCreate, VacanteOut, MatchCandidatoOut, MatchResponseOut, UsuarioOut, PostulacionOut
 )
 from jwt.security import obtener_password_hash, verificar_password, crear_token_acceso, SECRET_KEY, ALGORITHM
 from services.ai_service import evaluar_candidatos_para_vacante
@@ -30,7 +31,7 @@ def obtener_usuario_actual(token: str = Depends(oauth2_scheme), db: Session = De
         detail="No se pudieron validar las credenciales",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
+    try: 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
@@ -120,6 +121,26 @@ def ver_perfil(usuario=Depends(obtener_candidato_actual), db: Session = Depends(
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
     return perfil
 
+@candidatos_router.post("/vacantes/{id_vacante}/postular", status_code=status.HTTP_201_CREATED, response_model=PostulacionOut)
+def postular_a_vacante(id_vacante: int, usuario=Depends(obtener_candidato_actual), db: Session = Depends(get_db)):
+    vacante = db.query(Vacante).filter(Vacante.id == id_vacante).first()
+    if not vacante:
+        raise HTTPException(status_code=404, detail="Vacante no encontrada")
+        
+    # Verificar que no se haya postulado ya
+    postulacion_previa = db.query(Postulacion).filter(Postulacion.candidato_id == usuario.id, Postulacion.vacante_id == id_vacante).first()
+    if postulacion_previa:
+        raise HTTPException(status_code=400, detail="Ya estás postulado a esta vacante")
+        
+    nueva_postulacion = Postulacion(
+        candidato_id=usuario.id,
+        vacante_id=id_vacante
+    )
+    db.add(nueva_postulacion)
+    db.commit()
+    db.refresh(nueva_postulacion)
+    return nueva_postulacion
+
 # ==========================================
 # ROUTER: EMPRESAS
 # ==========================================
@@ -150,17 +171,31 @@ def obtener_matches(id_vacante: int, usuario=Depends(obtener_empresa_actual), db
     if not vacante:
         raise HTTPException(status_code=404, detail="Vacante no encontrada")
         
-    candidatos_activos = db.query(Usuario).filter(Usuario.rol == "candidato").all()
+    # Verificar tiempo de 3 minutos
+    if vacante.fecha_creacion:
+        tiempo_transcurrido = datetime.utcnow() - vacante.fecha_creacion
+        if tiempo_transcurrido < timedelta(minutes=3):
+            raise HTTPException(status_code=400, detail="La vacante sigue activa. El match solo se puede realizar 3 minutos después de su creación.")
+            
+    # Obtener solo los candidatos postulados
+    postulaciones = db.query(Postulacion).filter(Postulacion.vacante_id == id_vacante).all()
+    if not postulaciones:
+        return MatchResponseOut(resultados=[])
+        
+    candidatos_postulados = [postulacion.candidato for postulacion in postulaciones]
     
     # Procesar la IA
     try:
-        resultados_ia = evaluar_candidatos_para_vacante(candidatos_activos, vacante.titulo_oferta)
+        resultados_ia = evaluar_candidatos_para_vacante(candidatos_postulados, vacante.titulo_oferta)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en IA: {str(e)}")
         
     matches = []
     for res in resultados_ia:
         candidato = res["candidato"]
+        
+        porc_sugerido = f"{res['confianza_sugerida']*100:.2f}%" if res.get('confianza_sugerida') is not None else None
+        
         matches.append(MatchCandidatoOut(
             candidato_id=candidato.id,
             nombre_completo=candidato.nombre_completo,
@@ -168,27 +203,16 @@ def obtener_matches(id_vacante: int, usuario=Depends(obtener_empresa_actual), db
             perfil=candidato.perfil,
             porcentaje_match_vacante=f"{res['confianza_vacante']*100:.2f}%",
             confianza_vacante=res["confianza_vacante"],
-            rol_sugerido_por_ia=res["rol_sugerido"],
-            porcentaje_rol_sugerido=f"{res['confianza_sugerida']*100:.2f}%",
-            confianza_rol_sugerido=res["confianza_sugerida"]
+            es_top_3=res.get("es_top_3", False),
+            rol_sugerido_por_ia=res.get("rol_sugerido"),
+            porcentaje_rol_sugerido=porc_sugerido,
+            confianza_rol_sugerido=res.get("confianza_sugerida")
         ))
         
-    # Obtener el top 5
-    top_5 = matches[:5]
-    
-    if not top_5:
-        return MatchResponseOut(candidato_ideal=None, otras_sugerencias=[])
-        
-    candidato_ideal = top_5[0]
-    otras_sugerencias = top_5[1:]
-        
-    return MatchResponseOut(
-        candidato_ideal=candidato_ideal,
-        otras_sugerencias=otras_sugerencias
-    )
+    return MatchResponseOut(resultados=matches)
 
 # ==========================================
-# INCLUIR ROUTERS EN LA APP
+# RUTAS EN LA APP
 # ==========================================
 app.include_router(auth_router)
 app.include_router(candidatos_router)

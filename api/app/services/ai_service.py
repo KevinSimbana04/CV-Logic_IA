@@ -65,9 +65,8 @@ def evaluar_candidatos_para_vacante(candidatos, titulo_vacante: str):
 
     # Verificar si el titulo de la vacante existe en las clases del modelo
     try:
-        # Encontramos el índice de la clase que corresponde al título de la vacante
+       
         clases = list(_label_encoder.classes_)
-        # Hacemos una búsqueda insensible a mayúsculas
         titulo_lower = titulo_vacante.lower().strip()
         clase_idx = -1
         for i, c in enumerate(clases):
@@ -76,8 +75,6 @@ def evaluar_candidatos_para_vacante(candidatos, titulo_vacante: str):
                 break
         
         if clase_idx == -1:
-            # Si el rol no existe en el entrenamiento, no podemos predecir confianza exacta.
-            # Retornaremos 0% para todos o podríamos lanzar una excepción.
             print(f"Advertencia: El rol '{titulo_vacante}' no está en las clases de la IA.")
     except Exception as e:
         print(f"Error buscando clase: {e}")
@@ -92,8 +89,7 @@ def evaluar_candidatos_para_vacante(candidatos, titulo_vacante: str):
             continue
             
         input_data = {col: 0 for col in _feature_names}
-        
-        # Mapear tecnologías (ahora es una lista de strings)
+
         if isinstance(perfil.tecnologias, list):
             for tech in perfil.tecnologias:
                 if tech in input_data:
@@ -117,10 +113,8 @@ def evaluar_candidatos_para_vacante(candidatos, titulo_vacante: str):
     if not data_rows:
         return []
 
-    # Crear el DataFrame
     df = pd.DataFrame([row[1] for row in data_rows])
     
-    # Predecir probabilidades para todos los candidatos de golpe
     probabilidades_matriz = _modelo_nn.predict_proba(df)
     
     resultados = []
@@ -128,10 +122,8 @@ def evaluar_candidatos_para_vacante(candidatos, titulo_vacante: str):
         probs = probabilidades_matriz[i]
         
         if clase_idx != -1:
-            # Match específico con la vacante
             confianza_vacante = float(probs[clase_idx])
         else:
-            # Si el rol no existe, usar la máxima probabilidad general (fallback)
             confianza_vacante = float(np.max(probs))
             
         # Determinar qué rol cree la IA que realmente es este candidato
@@ -149,4 +141,13 @@ def evaluar_candidatos_para_vacante(candidatos, titulo_vacante: str):
     # Ordenar por el match de la vacante, para que los relevantes salgan primero
     resultados.sort(key=lambda x: x["confianza_vacante"], reverse=True)
     
+    # Asignar Top 3 y limpiar rol sugerido para ellos
+    for idx, res in enumerate(resultados):
+        if idx < 3:
+            res["es_top_3"] = True
+            res["rol_sugerido"] = None
+            res["confianza_sugerida"] = None
+        else:
+            res["es_top_3"] = False
+            
     return resultados

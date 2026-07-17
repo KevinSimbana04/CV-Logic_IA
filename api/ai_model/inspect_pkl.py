@@ -17,6 +17,18 @@ def inspect_models():
         print("Error loading lista_categorias:", e)
         
     try:
+        columnas_categoricas = joblib.load(os.path.join("tranformation", "columnas_categoricas.pkl"))
+        print("\n=== Columnas Categoricas ===")
+        print("Type:", type(columnas_categoricas))
+        if isinstance(columnas_categoricas, list) or isinstance(columnas_categoricas, tuple):
+            print("Length:", len(columnas_categoricas))
+            print("First 10 items:", columnas_categoricas[:10])
+        else:
+            print("Value:", columnas_categoricas)
+    except Exception as e:
+        print("Error loading columnas_categoricas:", e)
+        
+    try:
         columnas_datos = joblib.load(os.path.join("tranformation", "columnas_datos.pkl"))
         print("\n=== Columnas Datos ===")
         print("Type:", type(columnas_datos))
