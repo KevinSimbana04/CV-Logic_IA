@@ -14,6 +14,10 @@ from schemas import (
 from jwt.security import obtener_password_hash, verificar_password, crear_token_acceso, SECRET_KEY, ALGORITHM
 from services.ai_service import evaluar_candidatos_para_vacante
 
+# ==========================================
+# RECREAR TABLAS EN DESARROLLO
+# ==========================================
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CV-Logic AI: B2B Matchmaking", version="2.0.0")
 
