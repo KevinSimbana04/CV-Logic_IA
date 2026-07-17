@@ -1,6 +1,6 @@
-# CV-Logic_IA: Sistema de Filtrado Inteligente de Perfiles Profesionales
+# B2B-Logic_IA: Sistema de Filtrado Inteligente de Perfiles en el Area de Desarrollo de Software
 
-**CV-Logic AI** es una solución integral basada en Inteligencia Artificial diseñada para clasificar masivamente portafolios y currículums profesionales. Mediante el uso de Procesamiento de Lenguaje Natural (TF-IDF) combinado con modelos transparentes de Machine Learning (Regresión Logística) y una arquitectura web interactiva, permitimos a los departamentos de reclutamiento predecir la compatibilidad del talento de forma instantánea, eliminando sesgos cognitivos y tomando decisiones de contratación justas y basadas en datos.
+**B2B-Logic AI** es una solución integral basada en Inteligencia Artificial diseñada para evaluar características profesionales. Mediante el uso de una red neuronal (MLPClassifier) y una arquitectura web interactiva, permitimos a los departamentos de reclutamiento predecir la compatibilidad del talento de forma instantánea, eliminando sesgos cognitivos y tomando decisiones de contratación justas y basadas en datos.
 
 ---
 ## Enlaces del Proyecto
