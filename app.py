@@ -164,5 +164,6 @@ else:
     if st.session_state.rol == 'candidato':
         from pages.dashboard_candidato import show_dashboard_candidato
         show_dashboard_candidato()
-    else:
+    elif st.session_state.rol == 'empresa':
         from pages.dashboard_empresa import show_dashboard_empresa
+        show_dashboard_empresa()
