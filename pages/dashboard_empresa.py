@@ -1,5 +1,23 @@
 import streamlit as st
-from utils.data import calcular_match
+
+def calcular_match_interno(vacante, skills_candidato):
+    """Calcula un porcentaje de match interno basado en tecnologías y experiencia"""
+    tech_vacante = set([t.lower().strip() for t in vacante.get('tecnologias', [])])
+    tech_candidato = set([t.lower().strip() for t in skills_candidato.get('tecnologias', [])])
+    
+    if not tech_vacante:
+        score_tech = 100
+    else:
+        coincidencias = tech_vacante.intersection(tech_candidato)
+        score_tech = (len(coincidencias) / len(tech_vacante)) * 100
+        
+    exp_requerida = vacante.get('nivel_experiencia', 0)
+    exp_candidato = skills_candidato.get('anios_experiencia', 0)
+    
+    score_exp = 100 if exp_candidato >= exp_requerida else (exp_candidato / exp_requerida) * 100 if exp_requerida > 0 else 100
+    
+    # 70% peso a tecnologías, 30% a experiencia
+    return round((score_tech * 0.7) + (score_exp * 0.3))
 
 def show_dashboard_empresa():
     """Dashboard para empresas - Con navegación por tarjetas"""
@@ -103,6 +121,9 @@ def mostrar_lista_principal():
             # Botón nativo de Streamlit pegado a la caja para simular el click de la tarjeta
             if st.button(f"🔍 Ver detalles y postulantes", key=f"btn_vac_{vacante.get('id')}", use_container_width=True):
                 st.session_state.vacante_seleccionada = vacante.get('id')
+                # Limpiar estados de herramientas anteriores al cambiar de vista
+                st.session_state.ver_top_5 = False
+                st.session_state.ver_metricas = False
                 st.rerun()
 
 
@@ -137,7 +158,7 @@ def mostrar_detalle_vacante(vacante_id):
     st.markdown("---")
     st.subheader("📥 Candidatos Postulados")
     
-    # Buscar las postulaciones asociadas a este ID de oferta
+    # Buscar las postulaciones asociadas a este ID de oferta específico
     postulaciones = [p for p in st.session_state.mis_postulaciones if p.get('vacante_id') == vacante_id]
     
     if not postulaciones:
@@ -145,6 +166,59 @@ def mostrar_detalle_vacante(vacante_id):
     else:
         st.write(f"Se han encontrado **{len(postulaciones)}** postulantes interesados:")
         
+        # --- SECCIÓN DE HERRAMIENTAS MIGRADA AQUÍ (Dentro de Ver Detalles) ---
+        col_tools1, col_tools2 = st.columns(2)
+        
+        with col_tools1:
+            if st.button("🏆 Comparar Postulaciones (Top 5)", key=f"btn_top5_{vacante_id}", use_container_width=True, type="primary"):
+                st.session_state.ver_top_5 = not st.session_state.get('ver_top_5', False)
+                st.session_state.ver_metricas = False
+                st.rerun()
+                
+        with col_tools2:
+            if st.button("📊 Métricas de la Vacante", key=f"btn_metrics_{vacante_id}", use_container_width=True):
+                st.session_state.ver_metricas = not st.session_state.get('ver_metricas', False)
+                st.session_state.ver_top_5 = False
+                st.rerun()
+
+        # Desplegar Top 5 mejores coincidencias para esta vacante específica
+        if st.session_state.get('ver_top_5', False):
+            with st.expander("⭐ Top 5 Candidatos con Mejor Coincidencia", expanded=True):
+                matches_vacante = []
+                
+                for idx, p in enumerate(postulaciones):
+                    skills_candidato = p.get('skills', {})
+                    score = calcular_match_interno(vacante, skills_candidato)
+                    matches_vacante.append({
+                        'idx_original': idx + 1,
+                        'skills': skills_candidato,
+                        'score': score
+                    })
+                
+                # Ordenar de mayor a menor score y tomar los primeros 5
+                top_5 = sorted(matches_vacante, key=lambda x: x['score'], reverse=True)[:5]
+                for pos, item in enumerate(top_5):
+                    tech_cand = ", ".join(item['skills'].get('tecnologias', []))
+                    st.markdown(f"**#{pos+1}** - **Postulante #{item['idx_original']}**")
+                    st.write(f"🔹 **Match: {item['score']}%** | Exp: {item['skills'].get('anios_experiencia', 0)} años | Techs: {tech_cand}")
+                    st.markdown("---")
+
+        # Desplegar Métricas Específicas de la Vacante
+        if st.session_state.get('ver_metricas', False):
+            with st.expander("📈 Resumen de Métricas de la Vacante", expanded=True):
+                total_postulantes_v = len(postulaciones)
+                
+                # Calcular el promedio de match de todos los inscritos
+                scores = [calcular_match_interno(vacante, p.get('skills', {})) for p in postulaciones]
+                promedio_match = round(sum(scores) / total_postulantes_v) if total_postulantes_v > 0 else 0
+                
+                m_col1, m_col2 = st.columns(2)
+                m_col1.metric("Postulantes Totales", total_postulantes_v)
+                m_col2.metric("Promedio Coincidencia (Match)", f"{promedio_match}%")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # --- LISTADO TRADICIONAL DE CANDIDATOS ---
         for idx, p in enumerate(postulaciones):
             skills_candidato = p.get('skills', {})
             tech_cand = skills_candidato.get('tecnologias', [])
@@ -153,6 +227,9 @@ def mostrar_detalle_vacante(vacante_id):
             # Contenedor del candidato
             with st.container():
                 st.markdown(f"#### 👤 Postulante #{idx + 1}")
+                
+                # Cálculo asíncrono y automático sin botón manual
+                match_score = calcular_match_interno(vacante, skills_candidato)
                 
                 col_cand_info, col_cand_match = st.columns([2, 1])
                 
@@ -165,15 +242,10 @@ def mostrar_detalle_vacante(vacante_id):
                 
                 with col_cand_match:
                     st.write("")  # Espaciado estético
-                    # Botón de Match solicitado en la intersección del perfil del candidato
-                    if st.button(f"🎯 Calcular Match", key=f"calc_match_{vacante_id}_{idx}", use_container_width=True):
-                        match_score = calcular_match(vacante, skills_candidato)
-                        
-                        if match_score >= 70:
-                            st.success(f"**¡Match Altamente Recomendado!** \n\n Score: {match_score}%")
-                            st.balloons()
-                        elif match_score >= 50:
-                            st.warning(f"**Perfil Intermedio** \n\n Score: {match_score}%")
-                        else:
-                            st.error(f"**Match Insuficiente** \n\n Score: {match_score}%")
+                    if match_score >= 70:
+                        st.success(f"**¡Match Recomendado!** \n\n Score: {match_score}%")
+                    elif match_score >= 50:
+                        st.warning(f"**Perfil Intermedio** \n\n Score: {match_score}%")
+                    else:
+                        st.error(f"**Match Insuficiente** \n\n Score: {match_score}%")
             st.markdown("<br>", unsafe_allow_html=True)
