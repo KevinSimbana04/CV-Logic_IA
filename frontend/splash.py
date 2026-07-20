@@ -4,9 +4,7 @@ from PIL import Image
 import os
 
 def show_splash():
-    """Muestra la pantalla de inicio con animación"""
     
-    # Ocultar elementos de Streamlit
     hide_streamlit_style = """
         <style>
             #MainMenu {visibility: hidden;}
@@ -82,10 +80,10 @@ def show_splash():
                 st.image(img, width=200)
             except:
                 # Si no se puede cargar la imagen, mostrar emoji
-                st.markdown("<h1 style='text-align: center; font-size: 80px;'>📄</h1>", unsafe_allow_html=True)
+                st.markdown("<h1 style='text-align: center; font-size: 80px;'><span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;">description</span></h1>", unsafe_allow_html=True)
         else:
             # Si no hay imagen, mostrar emoji
-            st.markdown("<h1 style='text-align: center; font-size: 80px;'>📄</h1>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align: center; font-size: 80px;'><span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;">description</span></h1>", unsafe_allow_html=True)
         
         # Título principal
         st.markdown("""
@@ -112,7 +110,7 @@ def show_splash():
         st.markdown("<br>", unsafe_allow_html=True)
         
         # Botón para continuar (después de la animación)
-        if st.button("🚀 Comenzar", use_container_width=True):
+        if st.button(":material/rocket_launch: Comenzar", use_container_width=True):
             st.session_state.splash_shown = True
             st.rerun()
         

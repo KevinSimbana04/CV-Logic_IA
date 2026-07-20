@@ -1,251 +1,288 @@
 import streamlit as st
+import requests
 
-def calcular_match_interno(vacante, skills_candidato):
-    """Calcula un porcentaje de match interno basado en tecnologías y experiencia"""
-    tech_vacante = set([t.lower().strip() for t in vacante.get('tecnologias', [])])
-    tech_candidato = set([t.lower().strip() for t in skills_candidato.get('tecnologias', [])])
-    
-    if not tech_vacante:
-        score_tech = 100
-    else:
-        coincidencias = tech_vacante.intersection(tech_candidato)
-        score_tech = (len(coincidencias) / len(tech_vacante)) * 100
-        
-    exp_requerida = vacante.get('nivel_experiencia', 0)
-    exp_candidato = skills_candidato.get('anios_experiencia', 0)
-    
-    score_exp = 100 if exp_candidato >= exp_requerida else (exp_candidato / exp_requerida) * 100 if exp_requerida > 0 else 100
-    
-    # 70% peso a tecnologías, 30% a experiencia
-    return round((score_tech * 0.7) + (score_exp * 0.3))
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+API_URL = os.getenv("API_URL", "http://localhost:8000")
+
+def get_headers():
+    token = st.session_state.get('token')
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
 
 def show_dashboard_empresa():
-    """Dashboard para empresas - Con navegación por tarjetas"""
     
     # 🛡️ SEGURIDAD ANTIFALLOS: Asegurar que las variables globales existan
-    if 'vacantes' not in st.session_state:
-        st.session_state.vacantes = []
-    if 'mis_postulaciones' not in st.session_state:
-        st.session_state.mis_postulaciones = []
     if 'usuario' not in st.session_state or st.session_state.usuario is None:
         st.session_state.usuario = "Empresa"
-    # Estado para controlar qué pantalla ver ('lista' o el ID de la vacante seleccionada)
     if 'vacante_seleccionada' not in st.session_state:
         st.session_state.vacante_seleccionada = None
+    if 'vacante_seleccionada_info' not in st.session_state:
+        st.session_state.vacante_seleccionada_info = None
 
     # --- ENRUTADOR DE VISTAS ---
     if st.session_state.vacante_seleccionada is not None:
-        # Si hay una vacante seleccionada, cargamos la vista detallada en una "nueva página"
-        mostrar_detalle_vacante(st.session_state.vacante_seleccionada)
+        mostrar_detalle_vacante(st.session_state.vacante_seleccionada, st.session_state.vacante_seleccionada_info)
     else:
-        # Si no, cargamos la lista principal de tarjetas
         mostrar_lista_principal()
 
 
 def mostrar_lista_principal():
-    """Vista principal: Lista de vacantes y formulario de creación"""
-    # Cabecera / Navbar superior
+
     col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
-        st.title("🏢 Panel de Gestión")
-        st.markdown(f"👤 **Usuario:** {st.session_state.usuario}")
+        st.title(":material/business: Panel de Gestión")
+        st.markdown(f":material/person: **Usuario:** {st.session_state.usuario}")
     with col3:
-        if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        if st.button(":material/logout: Cerrar Sesión", use_container_width=True):
             st.session_state.autenticado = False
             st.session_state.usuario = None
             st.session_state.rol = None
+            st.session_state.token = None
             st.session_state.vacante_seleccionada = None
+            st.session_state.vacante_seleccionada_info = None
             st.rerun()
     
-    st.markdown("---")
     
-    # Formulario para agregar vacante
-    if st.button("➕ Agregar Nueva Vacante", use_container_width=True):
-        st.session_state.mostrar_form_vacante = True
+    tab_vacantes, tab_crear, tab_ia = st.tabs([":material/list_alt: Mis Vacantes", ":material/add: Nueva Vacante", ":material/psychology: Entrenamiento IA"])
     
-    if st.session_state.get('mostrar_form_vacante', False):
-        with st.expander("📝 Crear Nueva Vacante", expanded=True):
-            titulo = st.text_input("Título de la oferta", placeholder="Ej: Desarrollador Python Senior")
-            tecnologias = st.text_input("Tecnologías requeridas (separadas por coma)", placeholder="Python, FastAPI, SQL, Docker")
-            experiencia = st.number_input("Nivel de experiencia esperado (años)", min_value=0, max_value=15, value=3)
-            modalidad = st.selectbox("Modalidad", ["Remoto", "Híbrido", "Presencial"])
+    with tab_vacantes:
+        try:
+            res = requests.get(f"{API_URL}/empresas/vacantes", headers=get_headers())
+            mis_vacantes = res.json() if res.status_code == 200 else []
+        except Exception:
+            mis_vacantes = []
+            st.error(":material/cancel: Error de conexión al cargar vacantes")
             
-            col_save1, col_save2 = st.columns(2)
-            with col_save1:
-                if st.button("💾 Guardar Vacante", use_container_width=True):
-                    if titulo and tecnologias:
-                        tech_list = [t.strip() for t in tecnologias.split(',')]
-                        nueva_vacante = {
-                            'id': len(st.session_state.vacantes) + 1,
-                            'titulo': titulo,
-                            'empresa': st.session_state.usuario,
-                            'tecnologias': tech_list,
-                            'nivel_experiencia': experiencia,
-                            'modalidad': modalidad,
-                            'postulaciones': []
-                        }
-                        st.session_state.vacantes.append(nueva_vacante)
-                        st.session_state.mostrar_form_vacante = False
-                        st.success("✅ Vacante creada exitosamente")
+        if not mis_vacantes:
+            st.info(":material/push_pin: Aún no has creado vacantes. ¡Ve a la pestaña 'Nueva Vacante' para crear la primera!")
+        else:
+            st.write(f"**Total de vacantes activas:** {len(mis_vacantes)}")
+            
+            # Usar columnas para organizar las tarjetas de vacantes
+            cols = st.columns(2)
+            for idx, vacante in enumerate(mis_vacantes):
+                with cols[idx % 2]:
+                    with st.container(border=True):
+                        tecnologias_lista = vacante.get('tecnologias_requeridas', [])
+                        tech_texto = ", ".join(tecnologias_lista) if isinstance(tecnologias_lista, list) else str(tecnologias_lista)
+                        
+                        st.subheader(f":material/work: {vacante.get('titulo_oferta', 'Vacante')}")
+                        st.markdown(f"**:material/location_on: Modalidad:** {vacante.get('modalidad')}")
+                        st.markdown(f"**:material/bar_chart: Experiencia:** {vacante.get('nivel_experiencia_esperado')} años")
+                        st.markdown(f"**:material/build: Tecnologías:** {tech_texto}")
+                        
+                        st.write("") # Espaciador
+                        if st.button(f":material/search: Ver detalles y postulantes", key=f"btn_vac_{vacante.get('id')}", use_container_width=True):
+                            st.session_state.vacante_seleccionada = vacante.get('id')
+                            st.session_state.vacante_seleccionada_info = vacante
+                            st.session_state.ver_top_5 = False
+                            st.session_state.ver_metricas = False
+                            st.rerun()
+
+    with tab_crear:
+        st.subheader(":material/edit_document: Detalles de la Vacante")
+        titulo = st.text_input("Título de la oferta", placeholder="Ej: Desarrollador Python Senior")
+        tecnologias = st.text_input("Tecnologías requeridas (separadas por coma)", placeholder="Python, FastAPI, SQL, Docker")
+        
+        col_exp, col_mod = st.columns(2)
+        with col_exp:
+            experiencia = st.number_input("Nivel de experiencia esperado (años)", min_value=0, max_value=15, value=3)
+        with col_mod:
+            modalidad = st.selectbox("Modalidad", ["Remoto", "Híbrido", "Presencial"])
+        
+        st.write("")
+        if st.button(":material/save: Guardar Vacante", use_container_width=True, type="primary"):
+            if titulo and tecnologias:
+                tech_list = [t.strip() for t in tecnologias.split(',') if t.strip()]
+                payload = {
+                    "titulo_oferta": titulo,
+                    "tecnologias_requeridas": tech_list,
+                    "nivel_experiencia_esperado": experiencia,
+                    "modalidad": modalidad
+                }
+                try:
+                    res = requests.post(f"{API_URL}/empresas/vacantes", json=payload, headers=get_headers())
+                    if res.status_code == 201:
+                        st.success(":material/check_circle: Vacante creada exitosamente. Actualizando lista...")
+                        import time
+                        time.sleep(1.2)
                         st.rerun()
                     else:
-                        st.error("❌ Completa todos los campos")
-            with col_save2:
-                if st.button("❌ Cancelar", use_container_width=True):
-                    st.session_state.mostrar_form_vacante = False
-                    st.rerun()
-    
-    st.markdown("---")
-    st.subheader("📋 Mis Vacantes")
-    
-    # Filtrar vacantes de la empresa
-    mis_vacantes = [v for v in st.session_state.vacantes if v.get('empresa') == st.session_state.usuario]
-    st.write(f"**Vacantes encontradas:** {len(mis_vacantes)}")
-    
-    if not mis_vacantes:
-        st.info("📌 Aún no has creado vacantes. ¡Crea tu primera vacante!")
-    else:
-        # Renderizar cada vacante como tarjeta cliqueable
-        for vacante in mis_vacantes:
-            tecnologias_lista = vacante.get('tecnologias', [])
-            tech_texto = ", ".join(tecnologias_lista) if isinstance(tecnologias_lista, list) else str(tecnologias_lista)
-            
-            # Caja visual estilizada
-            st.markdown(f"""
-                <div style='padding: 15px; border-radius: 8px 8px 0 0; background: #f8f9fa; margin-top: 15px; border-top: 1px solid #e9ecef; border-left: 1px solid #e9ecef; border-right: 1px solid #e9ecef;'>
-                    <h3 style='margin: 0; color: #1E3A8A;'>💼 {vacante.get('titulo', 'Vacante sin título')}</h3>
-                    <p style='margin: 5px 0 0 0; color: #6B7280;'>🛠️ {tech_texto} | 📍 {vacante.get('modalidad')} | 📊 {vacante.get('nivel_experiencia')} años exp.</p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # Botón nativo de Streamlit pegado a la caja para simular el click de la tarjeta
-            if st.button(f"🔍 Ver detalles y postulantes", key=f"btn_vac_{vacante.get('id')}", use_container_width=True):
-                st.session_state.vacante_seleccionada = vacante.get('id')
-                # Limpiar estados de herramientas anteriores al cambiar de vista
-                st.session_state.ver_top_5 = False
-                st.session_state.ver_metricas = False
-                st.rerun()
+                        st.error(f":material/cancel: Error al crear vacante: {res.text}")
+                except Exception as e:
+                    st.error(f"Error de conexión: {str(e)}")
+            else:
+                st.error(":material/cancel: Completa todos los campos obligatorios")
 
+    with tab_ia:
+        st.subheader(":material/settings: Configuración del Modelo de Asignación")
+        st.markdown("Ajusta los parámetros para re-entrenar el modelo IA utilizado para predecir matches.")
+        
+        col_ia1, col_ia2 = st.columns(2)
+        with col_ia1:
+            hidden_layers = st.text_input("Capas Ocultas (separadas por coma)", value="128,64", help="Ejemplo: 128,64 para dos capas de 128 y 64 neuronas")
+            activation = st.selectbox("Función de Activación", ["relu", "identity", "logistic", "tanh"], index=0)
+        with col_ia2:
+            max_iter = st.number_input("Iteraciones Máximas (Épocas)", min_value=10, max_value=2000, value=300, step=50)
+            
+        st.write("")
+        if st.button(":material/rocket_launch: Iniciar Entrenamiento", use_container_width=True, type="primary"):
+            with st.spinner("Entrenando modelo de IA, esto puede tomar unos segundos..."):
+                payload_ia = {
+                    "hidden_layers": hidden_layers,
+                    "max_iter": max_iter,
+                    "activation": activation
+                }
+                try:
+                    res_ia = requests.post(f"{API_URL}/ia/entrenar", json=payload_ia, headers=get_headers())
+                    if res_ia.status_code == 200:
+                        st.success(f":material/check_circle: {res_ia.json().get('mensaje', 'Entrenamiento completado')}")
+                        import time
+                        time.sleep(1.2)
+                        st.rerun()
+                    else:
+                        st.error(f":material/cancel: Error durante el entrenamiento: {res_ia.text}")
+                except Exception as e:
+                    st.error(f":material/cancel: Error de conexión al servidor de IA: {str(e)}")
 
-def mostrar_detalle_vacante(vacante_id):
-    """Vista de detalle: Muestra la información completa y sus postulantes"""
-    # Buscar el objeto de la vacante activa
-    vacante = next((v for v in st.session_state.vacantes if v.get('id') == vacante_id), None)
-    
-    if not vacante:
-        st.error("❌ No se encontró la vacante seleccionada.")
-        if st.button("⬅️ Volver al panel"):
+        st.markdown("---")
+        st.subheader(":material/monitoring: Resultados del Último Entrenamiento")
+        
+        import os
+        import json
+        
+        # Rutas de los archivos generados en el backend
+        api_ai_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'api', 'ai_model'))
+        metrics_path = os.path.join(api_ai_dir, 'last_metrics.json')
+        cm_path = os.path.join(api_ai_dir, 'confusion_matrix.png')
+        
+        if os.path.exists(metrics_path):
+            with open(metrics_path, 'r') as f:
+                last_metrics = json.load(f)
+                
+            col_matrix, spacer, col_metrics = st.columns([1.8, 0.2, 1])
+            
+            with col_matrix:
+                if last_metrics.get('has_confusion_matrix') and os.path.exists(cm_path):
+                    st.markdown("#### :material/grid_on: Matriz de Confusión (Datos de Prueba)")
+                    st.image(cm_path, use_container_width=True)
+                else:
+                    st.info("La matriz de confusión no está disponible.")
+                    
+            with col_metrics:
+                st.markdown("#### :material/analytics: Métricas de Evaluación")
+                st.write("")
+                st.metric(":material/my_location: Accuracy (Exactitud)", f"{last_metrics.get('accuracy', 0)*100:.2f}%")
+                st.metric(":material/ads_click: Precision (Precisión)", f"{last_metrics.get('precision', 0)*100:.2f}%")
+                st.metric(":material/replay: Recall (Sensibilidad)", f"{last_metrics.get('recall', 0)*100:.2f}%")
+                st.metric(":material/stars: F1-Score (Puntaje F1)", f"{last_metrics.get('f1_score', 0)*100:.2f}%")
+        else:
+            st.info("No hay datos de entrenamientos previos. Ejecuta un entrenamiento para ver las métricas y la matriz de confusión.")
+def mostrar_detalle_vacante(vacante_id, vacante_info):
+    """Vista de detalle: Muestra la información completa y consulta el match de la IA"""
+    if not vacante_info:
+        st.error(":material/cancel: No se encontró la vacante seleccionada.")
+        if st.button(":material/arrow_back: Volver al panel"):
             st.session_state.vacante_seleccionada = None
             st.rerun()
         return
 
-    # Botón superior para regresar de página
-    if st.button("⬅️ Volver al listado de vacantes"):
+    if st.button(":material/arrow_back: Volver al listado de vacantes"):
         st.session_state.vacante_seleccionada = None
+        st.session_state.vacante_seleccionada_info = None
         st.rerun()
         
-    st.title(f"📌 {vacante.get('titulo')}")
-    st.markdown("### 📝 Requisitos de la Oferta")
+    st.title(f":material/push_pin: {vacante_info.get('titulo_oferta')}")
+    st.markdown("### :material/edit_document: Requisitos de la Oferta")
     
-    # Ficha técnica de la vacante
-    tech_texto = ", ".join(vacante.get('tecnologias', []))
+    tech_texto = ", ".join(vacante_info.get('tecnologias_requeridas', []))
     st.info(f"""
-    * **Modalidad:** {vacante.get('modalidad')}
-    * **Experiencia Mínima:** {vacante.get('nivel_experiencia')} años
+    * **Modalidad:** {vacante_info.get('modalidad')}
+    * **Experiencia Mínima:** {vacante_info.get('nivel_experiencia_esperado')} años
     * **Tecnologías Clave:** {tech_texto}
     """)
     
     st.markdown("---")
-    st.subheader("📥 Candidatos Postulados")
+    st.subheader(":material/analytics: Análisis de Postulantes (IA)")
     
-    # Buscar las postulaciones asociadas a este ID de oferta específico
-    postulaciones = [p for p in st.session_state.mis_postulaciones if p.get('vacante_id') == vacante_id]
+    # Consultar endpoint de match
+    with st.spinner("Consultando análisis de IA de postulantes..."):
+        try:
+            res = requests.get(f"{API_URL}/empresas/vacantes/{vacante_id}/match", headers=get_headers())
+            if res.status_code == 200:
+                matches_data = res.json().get('resultados', [])
+                mostrar_resultados_ia(matches_data, vacante_id)
+            elif res.status_code == 400:
+                error_detail = res.json().get("detail", "")
+                st.warning(f"⏳ **IA en proceso:** {error_detail}")
+                st.info("La recolección de candidatos y evaluación inicial requiere 3 minutos después de creada la vacante.")
+            else:
+                st.error(f":material/cancel: Error al obtener matches: {res.text}")
+        except Exception as e:
+            st.error(":material/cancel: Error de conexión al consultar matches.")
+
+def mostrar_resultados_ia(matches, vacante_id):
+    if not matches:
+        st.info(":material/inbox: Aún no se han recibido candidatos para esta posición, o la IA no encontró perfiles compatibles.")
+        return
+        
+    st.write(f"Se han evaluado **{len(matches)}** postulantes para esta vacante.")
     
-    if not postulaciones:
-        st.info("📭 Aún no se han recibido candidatos para esta posición.")
-    else:
-        st.write(f"Se han encontrado **{len(postulaciones)}** postulantes interesados:")
+    # 1. Ordenar todos los postulantes por score (confianza_vacante) de mayor a menor
+    matches_sorted = sorted(matches, key=lambda x: float(x.get('confianza_vacante', 0)), reverse=True)
+    
+    mejor_candidato = matches_sorted[0]
+    
+    st.markdown("### :material/star: Mejor Candidato Recomendado")
+    
+    perfil = mejor_candidato.get('perfil', {})
+    tech_cand = ", ".join(perfil.get('tecnologias', []))
+    match_score_str = mejor_candidato.get('porcentaje_match_vacante', '0%')
+    
+    with st.container(border=True):
+        st.markdown(f"#### :material/person: {mejor_candidato.get('nombre_completo')}")
         
-        # --- SECCIÓN DE HERRAMIENTAS MIGRADA AQUÍ (Dentro de Ver Detalles) ---
-        col_tools1, col_tools2 = st.columns(2)
+        col_cand_info, col_cand_match = st.columns([2, 1])
         
-        with col_tools1:
-            if st.button("🏆 Comparar Postulaciones (Top 5)", key=f"btn_top5_{vacante_id}", use_container_width=True, type="primary"):
-                st.session_state.ver_top_5 = not st.session_state.get('ver_top_5', False)
-                st.session_state.ver_metricas = False
-                st.rerun()
-                
-        with col_tools2:
-            if st.button("📊 Métricas de la Vacante", key=f"btn_metrics_{vacante_id}", use_container_width=True):
-                st.session_state.ver_metricas = not st.session_state.get('ver_metricas', False)
-                st.session_state.ver_top_5 = False
-                st.rerun()
-
-        # Desplegar Top 5 mejores coincidencias para esta vacante específica
-        if st.session_state.get('ver_top_5', False):
-            with st.expander("⭐ Top 5 Candidatos con Mejor Coincidencia", expanded=True):
-                matches_vacante = []
-                
-                for idx, p in enumerate(postulaciones):
-                    skills_candidato = p.get('skills', {})
-                    score = calcular_match_interno(vacante, skills_candidato)
-                    matches_vacante.append({
-                        'idx_original': idx + 1,
-                        'skills': skills_candidato,
-                        'score': score
-                    })
-                
-                # Ordenar de mayor a menor score y tomar los primeros 5
-                top_5 = sorted(matches_vacante, key=lambda x: x['score'], reverse=True)[:5]
-                for pos, item in enumerate(top_5):
-                    tech_cand = ", ".join(item['skills'].get('tecnologias', []))
-                    st.markdown(f"**#{pos+1}** - **Postulante #{item['idx_original']}**")
-                    st.write(f"🔹 **Match: {item['score']}%** | Exp: {item['skills'].get('anios_experiencia', 0)} años | Techs: {tech_cand}")
-                    st.markdown("---")
-
-        # Desplegar Métricas Específicas de la Vacante
-        if st.session_state.get('ver_metricas', False):
-            with st.expander("📈 Resumen de Métricas de la Vacante", expanded=True):
-                total_postulantes_v = len(postulaciones)
-                
-                # Calcular el promedio de match de todos los inscritos
-                scores = [calcular_match_interno(vacante, p.get('skills', {})) for p in postulaciones]
-                promedio_match = round(sum(scores) / total_postulantes_v) if total_postulantes_v > 0 else 0
-                
-                m_col1, m_col2 = st.columns(2)
-                m_col1.metric("Postulantes Totales", total_postulantes_v)
-                m_col2.metric("Promedio Coincidencia (Match)", f"{promedio_match}%")
+        with col_cand_info:
+            st.markdown(f"""
+            * **Contacto:** {mejor_candidato.get('email')}
+            * **Experiencia:** {perfil.get('anios_experiencia', 0)} años
+            * **Preferencia:** {perfil.get('modalidad', 'No especificada')}
+            * **Tecnologías:** {tech_cand}
+            """)
+            if mejor_candidato.get('rol_sugerido_por_ia'):
+                st.info(f":material/psychology: La IA sugiere que su perfil encaja más con: **{mejor_candidato.get('rol_sugerido_por_ia')}** ({mejor_candidato.get('porcentaje_rol_sugerido')})")
         
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # --- LISTADO TRADICIONAL DE CANDIDATOS ---
-        for idx, p in enumerate(postulaciones):
-            skills_candidato = p.get('skills', {})
-            tech_cand = skills_candidato.get('tecnologias', [])
-            tech_cand_texto = ", ".join(tech_cand)
+        with col_cand_match:
+            st.write("") 
+            st.success(f"**:material/verified: Match Destacado!** \n\n Score: {match_score_str}")
             
-            # Contenedor del candidato
-            with st.container():
-                st.markdown(f"#### 👤 Postulante #{idx + 1}")
+    st.write("")
+
+    if len(matches_sorted) > 1:
+        with st.expander(":material/emoji_events: Ver Otros Candidatos Destacados (Top 2-5)"):
+            otros_top = matches_sorted[1:5]
+            for pos, item in enumerate(otros_top):
+                perfil = item.get('perfil', {})
+                tech_cand = ", ".join(perfil.get('tecnologias', []))
                 
-                # Cálculo asíncrono y automático sin botón manual
-                match_score = calcular_match_interno(vacante, skills_candidato)
-                
-                col_cand_info, col_cand_match = st.columns([2, 1])
-                
-                with col_cand_info:
-                    st.markdown(f"""
-                    * **Experiencia del Candidato:** {skills_candidato.get('anios_experiencia', 0)} años
-                    * **Preferencia de Trabajo:** {skills_candidato.get('modalidad', 'No especificada')}
-                    * **Tecnologías que domina:** {tech_cand_texto}
-                    """)
-                
-                with col_cand_match:
-                    st.write("")  # Espaciado estético
-                    if match_score >= 70:
-                        st.success(f"**¡Match Recomendado!** \n\n Score: {match_score}%")
-                    elif match_score >= 50:
-                        st.warning(f"**Perfil Intermedio** \n\n Score: {match_score}%")
-                    else:
-                        st.error(f"**Match Insuficiente** \n\n Score: {match_score}%")
-            st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown(f"**#{pos+2}** - **{item.get('nombre_completo')}** ({item.get('email')})")
+                st.write(f":material/done_all: **Match: {item.get('porcentaje_match_vacante')}** | Exp: {perfil.get('anios_experiencia', 0)} años | Techs: {tech_cand}")
+                if item.get('rol_sugerido_por_ia'):
+                    st.write(f":material/psychology: *IA sugiere rol:* {item.get('rol_sugerido_por_ia')} ({item.get('porcentaje_rol_sugerido')})")
+                st.markdown("---")
+
+    with st.expander(":material/bar_chart: Ver Resumen de Métricas de la Vacante"):
+        total_postulantes_v = len(matches_sorted)
+        scores = [float(p.get('confianza_vacante', 0)) * 100 for p in matches_sorted]
+        promedio_match = round(sum(scores) / total_postulantes_v) if total_postulantes_v > 0 else 0
+        
+        m_col1, m_col2 = st.columns(2)
+        m_col1.metric("Postulantes Evaluados", total_postulantes_v)
+        m_col2.metric("Promedio Coincidencia (Match)", f"{promedio_match}%")
+        st.markdown("<br>", unsafe_allow_html=True)

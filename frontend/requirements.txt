@@ -1,4 +1,6 @@
-streamlit==1.28.1
-Pillow==10.1.0
-pandas==2.1.1
-numpy==1.24.3s
+streamlit
+Pillow
+pandas
+numpy
+requests
+python-dotenv

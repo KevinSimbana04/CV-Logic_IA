@@ -12,21 +12,8 @@ def init_session_state():
         st.session_state.pagina_actual = 'login'
     if 'splash_shown' not in st.session_state:
         st.session_state.splash_shown = False
-    
-    # USUARIOS PRE-DEFINIDOS
-    if 'usuarios' not in st.session_state:
-        st.session_state.usuarios = {
-            'candidato@test.com': {
-                'password': '123456',
-                'rol': 'candidato',
-                'nombre': 'Juan Pérez'
-            },
-            'empresa@test.com': {
-                'password': '123456',
-                'rol': 'empresa',
-                'nombre': 'Tech Solutions S.A.'
-            }
-        }
+    if 'token' not in st.session_state:
+        st.session_state.token = None
     
     # Datos de vacantes
     if 'vacantes' not in st.session_state:
