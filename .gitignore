@@ -16,3 +16,8 @@ __pycache__/
 venv/
 env/
 .venv/
+
+# Frontend (Streamlit)
+frontend/.env
+frontend/.streamlit/
+.streamlit/

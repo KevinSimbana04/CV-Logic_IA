@@ -10,10 +10,12 @@ from data.database import engine, Base, get_db
 from models.models import Usuario, PerfilCandidato, Vacante, Postulacion
 from schemas import (
     RegistroUsuario, TokenAuth, PerfilCandidatoCreate, PerfilCandidatoOut,
-    VacanteCreate, VacanteOut, MatchCandidatoOut, MatchResponseOut, UsuarioOut, PostulacionOut
+    VacanteCreate, VacanteOut, MatchCandidatoOut, MatchResponseOut, UsuarioOut, PostulacionOut,
+    TrainingParams, TrainingMetricsOut
 )
 from jwt.security import obtener_password_hash, verificar_password, crear_token_acceso, SECRET_KEY, ALGORITHM
 from services.ai_service import evaluar_candidatos_para_vacante
+from services.training_service import entrenar_modelo_ia
 
 # ==========================================
 # RECREAR TABLAS EN DESARROLLO
@@ -84,6 +86,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     token = crear_token_acceso(data={"sub": usuario.email, "rol": usuario.rol})
     return {"access_token": token, "token_type": "bearer"}
 
+@auth_router.get("/me", response_model=UsuarioOut)
+def obtener_perfil_actual(usuario: Usuario = Depends(obtener_usuario_actual)):
+    return usuario
+
 # ==========================================
 # ROUTER: CANDIDATOS
 # ==========================================
@@ -140,6 +146,14 @@ def postular_a_vacante(id_vacante: int, usuario=Depends(obtener_candidato_actual
     db.commit()
     db.refresh(nueva_postulacion)
     return nueva_postulacion
+
+@candidatos_router.get("/vacantes", response_model=List[VacanteOut])
+def listar_vacantes_disponibles(usuario=Depends(obtener_candidato_actual), db: Session = Depends(get_db)):
+    return db.query(Vacante).all()
+
+@candidatos_router.get("/postulaciones", response_model=List[PostulacionOut])
+def listar_mis_postulaciones(usuario=Depends(obtener_candidato_actual), db: Session = Depends(get_db)):
+    return db.query(Postulacion).filter(Postulacion.candidato_id == usuario.id).all()
 
 # ==========================================
 # ROUTER: EMPRESAS
@@ -212,8 +226,24 @@ def obtener_matches(id_vacante: int, usuario=Depends(obtener_empresa_actual), db
     return MatchResponseOut(resultados=matches)
 
 # ==========================================
+# ROUTER: IA (ENTRENAMIENTO)
+# ==========================================
+ia_router = APIRouter(prefix="/ia", tags=["Inteligencia Artificial"])
+
+@ia_router.post("/entrenar", response_model=TrainingMetricsOut)
+def entrenar_ia(params: TrainingParams, usuario=Depends(obtener_empresa_actual)):
+    try:
+        resultado = entrenar_modelo_ia(params)
+        return resultado
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error durante el entrenamiento: {str(e)}")
+
+# ==========================================
 # RUTAS EN LA APP
 # ==========================================
 app.include_router(auth_router)
 app.include_router(candidatos_router)
 app.include_router(empresas_router)
+app.include_router(ia_router)

@@ -6,10 +6,10 @@ from datetime import datetime
 # USUARIOS Y AUTENTICACIÓN
 # ==========================================
 class RegistroUsuario(BaseModel):
-    email: EmailStr = Field(..., example="usuario@empresa.com")
-    password: str = Field(..., min_length=6, example="Secreta123!")
-    rol: str = Field(..., pattern="^(empresa|candidato)$", example="empresa")
-    nombre_completo: str = Field(..., example="Tech Solutions S.A.")
+    email: EmailStr = Field(...)
+    password: str = Field(..., min_length=6)
+    rol: str = Field(..., pattern="^(empresa|candidato)$")
+    nombre_completo: str = Field(...)
 
 class TokenAuth(BaseModel):
     access_token: str
@@ -67,6 +67,7 @@ class PostulacionOut(BaseModel):
     candidato_id: int
     vacante_id: int
     fecha_postulacion: datetime
+    vacante: Optional[VacanteOut] = None
 
     class Config:
         from_attributes = True
@@ -88,3 +89,18 @@ class MatchCandidatoOut(BaseModel):
 
 class MatchResponseOut(BaseModel):
     resultados: List[MatchCandidatoOut] = []
+
+# ==========================================
+# ENTRENAMIENTO IA
+# ==========================================
+class TrainingParams(BaseModel):
+    hidden_layers: str = Field(default="128,64", description="Capas ocultas separadas por coma, ej: 128,64")
+    max_iter: int = Field(default=300, description="Número máximo de iteraciones (épocas)")
+    activation: str = Field(default="relu", pattern="^(identity|logistic|tanh|relu)$", description="Función de activación")
+
+class TrainingMetricsOut(BaseModel):
+    mensaje: str
+    accuracy: float
+    precision: float
+    recall: float
+    f1_score: float
