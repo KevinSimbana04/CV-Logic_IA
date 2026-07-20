@@ -147,11 +147,12 @@ def mostrar_lista_principal():
                     st.error(f":material/cancel: Error de conexión al servidor de IA: {str(e)}")
 
         st.markdown("---")
-        st.subheader(":material/monitoring: Resultados del Último Entrenamiento")
-        
-        import os
-        api_ai_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'api', 'ai_model'))
-        cm_path = os.path.join(api_ai_dir, 'confusion_matrix.png')
+        col_sub_m, col_ref_m = st.columns([3, 1])
+        with col_sub_m:
+            st.subheader(":material/monitoring: Resultados del Último Entrenamiento")
+        with col_ref_m:
+            if st.button("🔄 Refrescar Métricas", use_container_width=True):
+                st.rerun()
         
         try:
             res_metrics = requests.get(f"{API_URL}/ia/metricas", headers=get_headers())
@@ -161,9 +162,9 @@ def mostrar_lista_principal():
                     col_matrix, spacer, col_metrics = st.columns([1.8, 0.2, 1])
                     
                     with col_matrix:
-                        if last_metrics.get('has_confusion_matrix') and os.path.exists(cm_path):
+                        if last_metrics.get('has_confusion_matrix'):
                             st.markdown("#### :material/grid_on: Matriz de Confusión (Datos de Prueba)")
-                            st.image(cm_path, use_container_width=True)
+                            st.image(f"{API_URL}/ia/matriz", use_container_width=True)
                         else:
                             st.info("La matriz de confusión no está disponible.")
                             
