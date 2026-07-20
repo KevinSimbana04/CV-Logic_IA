@@ -7,9 +7,9 @@
 ## 🔗 Enlaces del Proyecto
 | Recurso                      | Enlace                                                                                   |
 |------------------------------|------------------------------------------------------------------------------------------|
-| **Sistema en Producción**    |                                                                                          |
-| **Demo en Video**            |                                                                                          |
-| **Informe Técnico**          |                                                                                          |
+| **Sistema en Producción**    |  [Ver Aplicación Web](https://b2b-logic.onrender.com/)                                                                                  |
+| **Demo en Video**            |     [Ver en YouTube](https://www.youtube.com/watch?v=otuuiNB28cg)                                                                                      |
+| **Informe Técnico**          | [Ver PDF en OneDrive](https://epnecuador-my.sharepoint.com/:f:/g/personal/kevin_simbana06_epn_edu_ec/IgA2p_ETrsQhR6s3Z_ISht0HAYQm-u3zufFd9ouhxKUzye8?e=zKon5d) |
 
 ---
 
