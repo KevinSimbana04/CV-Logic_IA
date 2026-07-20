@@ -266,6 +266,17 @@ def obtener_ultimas_metricas(usuario=Depends(obtener_empresa_actual)):
         metricas = json.load(file)
     return metricas
 
+@ia_router.get("/matriz")
+def obtener_matriz(usuario=Depends(obtener_empresa_actual)):
+    import os
+    from fastapi.responses import FileResponse
+    from services.training_service import MODELS_DIR
+    
+    ruta_matriz = os.path.join(MODELS_DIR, 'confusion_matrix.png')
+    if os.path.exists(ruta_matriz):
+        return FileResponse(ruta_matriz, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Matriz de confusión no encontrada.")
+
 # ==========================================
 # RUTAS EN LA APP
 # ==========================================
