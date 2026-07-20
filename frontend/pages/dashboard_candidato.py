@@ -17,10 +17,9 @@ def show_dashboard_candidato():
         st.markdown(f":material/person: **Usuario:** {st.session_state.usuario}")
     with col3:
         if st.button(":material/logout: Cerrar Sesión", use_container_width=True):
-            st.session_state.autenticado = False
-            st.session_state.token = None
-            st.session_state.usuario = None
-            st.session_state.rol = None
+            for key in list(st.session_state.keys()):
+                if key != 'splash_shown':
+                    del st.session_state[key]
             st.rerun()
     
     

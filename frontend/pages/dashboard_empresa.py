@@ -38,12 +38,9 @@ def mostrar_lista_principal():
         st.markdown(f":material/person: **Usuario:** {st.session_state.usuario}")
     with col3:
         if st.button(":material/logout: Cerrar Sesión", use_container_width=True):
-            st.session_state.autenticado = False
-            st.session_state.usuario = None
-            st.session_state.rol = None
-            st.session_state.token = None
-            st.session_state.vacante_seleccionada = None
-            st.session_state.vacante_seleccionada_info = None
+            for key in list(st.session_state.keys()):
+                if key != 'splash_shown':
+                    del st.session_state[key]
             st.rerun()
     
     
@@ -131,7 +128,7 @@ def mostrar_lista_principal():
             
         st.write("")
         if st.button(":material/rocket_launch: Iniciar Entrenamiento", use_container_width=True, type="primary"):
-            with st.spinner("Entrenando modelo de IA, esto puede tomar unos segundos..."):
+            with st.spinner("Iniciando entrenamiento en segundo plano..."):
                 payload_ia = {
                     "hidden_layers": hidden_layers,
                     "max_iter": max_iter,
@@ -140,9 +137,9 @@ def mostrar_lista_principal():
                 try:
                     res_ia = requests.post(f"{API_URL}/ia/entrenar", json=payload_ia, headers=get_headers())
                     if res_ia.status_code == 200:
-                        st.success(f":material/check_circle: {res_ia.json().get('mensaje', 'Entrenamiento completado')}")
+                        st.success(f":material/check_circle: {res_ia.json().get('mensaje', 'Entrenamiento iniciado')}")
                         import time
-                        time.sleep(1.2)
+                        time.sleep(2)
                         st.rerun()
                     else:
                         st.error(f":material/cancel: Error durante el entrenamiento: {res_ia.text}")
@@ -150,38 +147,45 @@ def mostrar_lista_principal():
                     st.error(f":material/cancel: Error de conexión al servidor de IA: {str(e)}")
 
         st.markdown("---")
-        st.subheader(":material/monitoring: Resultados del Último Entrenamiento")
+        col_sub_m, col_ref_m = st.columns([3, 1])
+        with col_sub_m:
+            st.subheader(":material/monitoring: Resultados del Último Entrenamiento")
+        with col_ref_m:
+            if st.button("🔄 Refrescar Métricas", use_container_width=True):
+                st.rerun()
         
-        import os
-        import json
-        
-        # Rutas de los archivos generados en el backend
-        api_ai_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'api', 'ai_model'))
-        metrics_path = os.path.join(api_ai_dir, 'last_metrics.json')
-        cm_path = os.path.join(api_ai_dir, 'confusion_matrix.png')
-        
-        if os.path.exists(metrics_path):
-            with open(metrics_path, 'r') as f:
-                last_metrics = json.load(f)
-                
-            col_matrix, spacer, col_metrics = st.columns([1.8, 0.2, 1])
-            
-            with col_matrix:
-                if last_metrics.get('has_confusion_matrix') and os.path.exists(cm_path):
-                    st.markdown("#### :material/grid_on: Matriz de Confusión (Datos de Prueba)")
-                    st.image(cm_path, use_container_width=True)
-                else:
-                    st.info("La matriz de confusión no está disponible.")
+        try:
+            res_metrics = requests.get(f"{API_URL}/ia/metricas", headers=get_headers())
+            if res_metrics.status_code == 200:
+                last_metrics = res_metrics.json()
+                if "accuracy" in last_metrics:
+                    col_matrix, spacer, col_metrics = st.columns([1.8, 0.2, 1])
                     
-            with col_metrics:
-                st.markdown("#### :material/analytics: Métricas de Evaluación")
-                st.write("")
-                st.metric(":material/my_location: Accuracy (Exactitud)", f"{last_metrics.get('accuracy', 0)*100:.2f}%")
-                st.metric(":material/ads_click: Precision (Precisión)", f"{last_metrics.get('precision', 0)*100:.2f}%")
-                st.metric(":material/replay: Recall (Sensibilidad)", f"{last_metrics.get('recall', 0)*100:.2f}%")
-                st.metric(":material/stars: F1-Score (Puntaje F1)", f"{last_metrics.get('f1_score', 0)*100:.2f}%")
-        else:
-            st.info("No hay datos de entrenamientos previos. Ejecuta un entrenamiento para ver las métricas y la matriz de confusión.")
+                    with col_matrix:
+                        if last_metrics.get('has_confusion_matrix'):
+                            st.markdown("#### :material/grid_on: Matriz de Confusión (Datos de Prueba)")
+                            # Descargar la imagen con los headers de seguridad y mostrarla
+                            res_img = requests.get(f"{API_URL}/ia/matriz", headers=get_headers())
+                            if res_img.status_code == 200:
+                                st.image(res_img.content, use_container_width=True)
+                            else:
+                                st.error("No se pudo cargar la imagen de la matriz (Error de permisos o no encontrada).")
+                        else:
+                            st.info("La matriz de confusión no está disponible.")
+                            
+                    with col_metrics:
+                        st.markdown("#### :material/analytics: Métricas de Evaluación")
+                        st.write("")
+                        st.metric(":material/my_location: Accuracy (Exactitud)", f"{last_metrics.get('accuracy', 0)*100:.2f}%")
+                        st.metric(":material/ads_click: Precision (Precisión)", f"{last_metrics.get('precision', 0)*100:.2f}%")
+                        st.metric(":material/replay: Recall (Sensibilidad)", f"{last_metrics.get('recall', 0)*100:.2f}%")
+                        st.metric(":material/stars: F1-Score (Puntaje F1)", f"{last_metrics.get('f1_score', 0)*100:.2f}%")
+                else:
+                    st.info(last_metrics.get("mensaje", "No hay datos de entrenamientos previos."))
+            else:
+                st.info("Aún no hay métricas de entrenamiento disponibles.")
+        except Exception:
+            st.error("No se pudieron cargar las métricas de evaluación.")
 def mostrar_detalle_vacante(vacante_id, vacante_info):
     """Vista de detalle: Muestra la información completa y consulta el match de la IA"""
     if not vacante_info:
