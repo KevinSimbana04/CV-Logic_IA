@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+API_URL = os.getenv("API_URL", "https://b2b-logic-ia.onrender.com")
 
 def show_dashboard_candidato():
     """Dashboard para candidatos"""
