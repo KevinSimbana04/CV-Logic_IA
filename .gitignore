@@ -1,0 +1,23 @@
+# Variables de entorno
+.env
+api/app/.env
+
+# Scripts de base de datos
+reset_db.py
+api/app/data/reset_db.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# Frontend (Streamlit)
+frontend/.env
+frontend/.streamlit/
+.streamlit/
