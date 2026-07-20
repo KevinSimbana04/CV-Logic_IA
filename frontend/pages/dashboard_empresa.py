@@ -164,7 +164,12 @@ def mostrar_lista_principal():
                     with col_matrix:
                         if last_metrics.get('has_confusion_matrix'):
                             st.markdown("#### :material/grid_on: Matriz de Confusión (Datos de Prueba)")
-                            st.image(f"{API_URL}/ia/matriz", use_container_width=True)
+                            # Descargar la imagen con los headers de seguridad y mostrarla
+                            res_img = requests.get(f"{API_URL}/ia/matriz", headers=get_headers())
+                            if res_img.status_code == 200:
+                                st.image(res_img.content, use_container_width=True)
+                            else:
+                                st.error("No se pudo cargar la imagen de la matriz (Error de permisos o no encontrada).")
                         else:
                             st.info("La matriz de confusión no está disponible.")
                             
