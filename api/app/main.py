@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, APIRouter
+from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List
@@ -230,15 +230,41 @@ def obtener_matches(id_vacante: int, usuario=Depends(obtener_empresa_actual), db
 # ==========================================
 ia_router = APIRouter(prefix="/ia", tags=["Inteligencia Artificial"])
 
-@ia_router.post("/entrenar", response_model=TrainingMetricsOut)
-def entrenar_ia(params: TrainingParams, usuario=Depends(obtener_empresa_actual)):
+@ia_router.post("/entrenar")
+def entrenar_ia(params: TrainingParams, background_tasks: BackgroundTasks, usuario=Depends(obtener_empresa_actual)):
     try:
-        resultado = entrenar_modelo_ia(params)
-        return resultado
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        background_tasks.add_task(entrenar_modelo_ia, params)
+        
+        import json
+        import os
+        from services.training_service import MODELS_DIR
+        
+        metricas_anteriores = {}
+        ruta_metricas = os.path.join(MODELS_DIR, 'last_metrics.json')
+        if os.path.exists(ruta_metricas):
+            with open(ruta_metricas, 'r') as file:
+                metricas_anteriores = json.load(file)
+                
+        respuesta = {"mensaje": "Nuevo entrenamiento iniciado en segundo plano. Mostrando métricas del modelo actual."}
+        respuesta.update(metricas_anteriores)
+        
+        return respuesta
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error durante el entrenamiento: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al iniciar el entrenamiento: {str(e)}")
+
+@ia_router.get("/metricas")
+def obtener_ultimas_metricas(usuario=Depends(obtener_empresa_actual)):
+    import json
+    import os
+    from services.training_service import MODELS_DIR
+    
+    ruta_metricas = os.path.join(MODELS_DIR, 'last_metrics.json')
+    if not os.path.exists(ruta_metricas):
+        return {"mensaje": "Aún no hay entrenamientos previos."}
+        
+    with open(ruta_metricas, 'r') as file:
+        metricas = json.load(file)
+    return metricas
 
 # ==========================================
 # RUTAS EN LA APP
